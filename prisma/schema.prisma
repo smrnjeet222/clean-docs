@@ -1,0 +1,63 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  name         String
+  passwordHash String
+  createdAt    DateTime   @default(now())
+  documents    Document[] @relation("OwnedDocuments")
+  shares       Share[]
+}
+
+model Document {
+  id        String      @id @default(cuid())
+  title     String      @default("Untitled")
+  contentHtml String    @default("")
+  version   Int         @default(0)
+  owner     User        @relation("OwnedDocuments", fields: [ownerId], references: [id], onDelete: Cascade)
+  ownerId   String
+  shares    Share[]
+  files     FileAsset[]
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@index([ownerId])
+}
+
+enum ShareRole {
+  VIEW
+  EDIT
+}
+
+model Share {
+  id         String    @id @default(cuid())
+  document   Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  documentId String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String
+  role       ShareRole @default(EDIT)
+  createdAt  DateTime  @default(now())
+
+  @@unique([documentId, userId])
+  @@index([userId])
+}
+
+model FileAsset {
+  id         String   @id @default(cuid())
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  documentId String
+  filename   String
+  mimeType   String
+  size       Int
+  data       Bytes
+  createdAt  DateTime @default(now())
+
+  @@index([documentId])
+}
