@@ -4,7 +4,7 @@ A lightweight collaborative document editor: rich-text editing, file attachments
 per-user sharing with an owned-vs-shared distinction, live freshness on shared
 documents, and durable persistence.
 
-- **Live demo:** `<DEPLOY_URL>` *(fill in after deploy)*
+- **Live demo:** [`folio.jeet22.xyz`](https://folio.jeet22.xyz/)
 - **Stack:** Next.js 16 (App Router) · TypeScript · Tailwind · Tiptap · TanStack Query · Zustand · Prisma 7 · Postgres (Neon) · iron-session
 
 ## Test credentials (seeded)
