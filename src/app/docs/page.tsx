@@ -27,11 +27,13 @@ export default async function DocsPage() {
   ]);
 
   return (
-    <main className="mx-auto w-full max-w-[1600px] px-8 py-10">
-      <header className="mb-8 flex items-center justify-between">
+    <main className="mx-auto w-full max-w-[1120px] px-6 py-14 md:px-10">
+      <header className="mb-12 flex items-end justify-between border-b border-carbon/10 pb-8">
         <div>
-          <h1 className="text-2xl font-semibold text-neutral-900">Your documents</h1>
-          <p className="text-sm text-neutral-500">Signed in as {session.name} ({session.email})</p>
+          <h1 className="font-editorial text-[52px] leading-[1.08]">Documents</h1>
+          <p className="mt-2 text-[14px] text-graphite">
+            Signed in as <span className="text-pewter">{session.name}</span> · {session.email}
+          </p>
         </div>
         <LogoutButton />
       </header>

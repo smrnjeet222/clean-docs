@@ -1,24 +1,81 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ── Fabric design system — editorial manuscript on a drafting table ── */
+@theme {
+  /* Palette — 98% achromatic, one electric-violet glow */
+  --color-electric-violet: #1100ff;
+  --color-ink-violet: #19154e;
+  --color-press-black: #0a0a0a;
+  --color-carbon: #000000;
+  --color-paper-white: #ffffff;
+  --color-newsprint: #f3f3f3;
+  --color-graphite: #666666;
+  --color-slate: #333333;
+  --color-pewter: #404040;
+  --color-ash: #b3b3b3;
+  --color-smoke: #737373;
+
+  /* Type */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: var(--font-display), Cormorant Garamond, Playfair Display, Lora, Georgia, serif;
+
+  /* Radii */
+  --radius-button: 8px;
+  --radius-card: 16px;
+  --radius-large: 24px;
+  --radius-pill: 40px;
+
+  /* Paper-grain elevation */
+  --shadow-subtle: rgba(0, 0, 0, 0.1) 0px 1px 1px 0px, rgba(0, 0, 0, 0.05) 0px 2px 4px 0px;
+  --shadow-glow: rgba(17, 0, 255, 0.15) 0px 0px 40px 0px;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: ui-sans-serif, system-ui, Arial, Helvetica, sans-serif;
+  font-feature-settings: "kern", "salt";
+  letter-spacing: -0.01em;
 }
 
-.ProseMirror:focus {
+/* Editorial display serif helper */
+.font-editorial {
+  font-family: var(--font-display);
+  font-weight: 300;
+  letter-spacing: -0.02em;
+  line-height: 1.08;
+  color: var(--color-press-black);
+}
+
+/* Electric-violet focus halo — the single chromatic accent, as a glow not a fill */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
   outline: none;
+  box-shadow: 0 0 0 3px rgba(17, 0, 255, 0.22);
+  border-color: var(--color-ink-violet);
+}
+
+/* Tiptap surface — the editable body is not a control; no focus halo on it */
+.ProseMirror:focus,
+.ProseMirror:focus-visible {
+  outline: none;
+  box-shadow: none;
+  border-color: transparent;
 }
 .ProseMirror p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
-  color: #9ca3af;
+  color: var(--color-ash);
   float: left;
   height: 0;
   pointer-events: none;
+}
+
+/* Editor prose tuned to the palette: serif headings, Inter body */
+.prose :where(h1, h2, h3) {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  color: var(--color-press-black);
+}
+.prose {
+  --tw-prose-body: var(--color-press-black);
+  --tw-prose-bullets: var(--color-graphite);
+  --tw-prose-counters: var(--color-graphite);
 }

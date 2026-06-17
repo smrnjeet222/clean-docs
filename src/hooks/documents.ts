@@ -87,6 +87,33 @@ export function useImportDocument() {
   });
 }
 
+/** Delete a document (owner only). */
+export function useDeleteDocument() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiFetch<{ ok: true }>(`/api/documents/${id}`, { method: "DELETE" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: documentKeys.all }),
+  });
+}
+
+/** Copy any readable document into a new one owned by the current user. */
+export function useDuplicateDocument() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiFetch<{ id: string }>(`/api/documents/${id}/duplicate`, { method: "POST" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: documentKeys.all }),
+  });
+}
+
+/** Leave a document shared with you (removes your own access). */
+export function useLeaveDocument() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiFetch<{ ok: true }>(`/api/documents/${id}/leave`, { method: "POST" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: documentKeys.all }),
+  });
+}
+
 export function useUploadFile(id: string) {
   const qc = useQueryClient();
   return useMutation({

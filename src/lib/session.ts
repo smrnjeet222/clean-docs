@@ -9,7 +9,7 @@ export type SessionData = {
 
 export const sessionOptions: SessionOptions = {
   password: process.env.SESSION_SECRET ?? "dev-only-insecure-secret-please-set-SESSION_SECRET-32",
-  cookieName: "ajaia_docs_session",
+  cookieName: "folio_session",
   cookieOptions: {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",

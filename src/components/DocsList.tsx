@@ -3,7 +3,13 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useCreateDocument, useImportDocument } from "@/hooks/documents";
+import {
+  useCreateDocument,
+  useImportDocument,
+  useDeleteDocument,
+  useDuplicateDocument,
+  useLeaveDocument,
+} from "@/hooks/documents";
 import { fileTextToHtml, formatForFilename, titleFromFilename } from "@/lib/document-format";
 
 type OwnedDoc = { id: string; title: string; updatedAt: string };
@@ -24,12 +30,41 @@ function fmt(iso: string) {
   return `${dateFmt.format(new Date(iso))} UTC`;
 }
 
+function GhostBtn({
+  onClick,
+  children,
+  danger,
+  disabled,
+}: {
+  onClick: () => void;
+  children: React.ReactNode;
+  danger?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`rounded-[8px] px-2.5 py-1 text-[12px] font-medium transition-colors disabled:opacity-40 ${
+        danger ? "text-[#b00020] hover:bg-[#b00020]/8" : "text-ink-violet hover:bg-newsprint"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
 export default function DocsList({ owned, shared }: { owned: OwnedDoc[]; shared: SharedDoc[] }) {
   const router = useRouter();
   const create = useCreateDocument();
   const importDoc = useImportDocument();
+  const duplicate = useDuplicateDocument();
+  const remove = useDeleteDocument();
+  const leave = useLeaveDocument();
   const fileInput = useRef<HTMLInputElement>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const busy = duplicate.isPending || remove.isPending || leave.isPending;
 
   async function createDoc() {
     const doc = await create.mutateAsync();
@@ -52,22 +87,41 @@ export default function DocsList({ owned, shared }: { owned: OwnedDoc[]; shared:
     }
   }
 
+  async function copyDoc(id: string) {
+    const copy = await duplicate.mutateAsync(id);
+    router.push(`/docs/${copy.id}`);
+  }
+
+  async function deleteDoc(id: string, title: string) {
+    if (!window.confirm(`Delete “${title}”? This cannot be undone.`)) return;
+    await remove.mutateAsync(id);
+    router.refresh();
+  }
+
+  async function leaveDoc(id: string, title: string) {
+    if (!window.confirm(`Leave “${title}”? You'll lose access until it's shared again.`)) return;
+    await leave.mutateAsync(id);
+    router.refresh();
+  }
+
+  const rowBase = "flex items-center gap-4 px-5 py-4 transition-colors hover:bg-newsprint";
+
   return (
     <div className="space-y-8">
       <div className="flex flex-wrap items-center gap-3">
         <button
           onClick={createDoc}
           disabled={create.isPending}
-          className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
+          className="rounded-[8px] bg-press-black px-4 py-2.5 text-[15px] font-semibold text-paper-white shadow-[var(--shadow-subtle)] transition-colors hover:bg-carbon disabled:opacity-50"
         >
-          {create.isPending ? "Creating…" : "+ New document"}
+          {create.isPending ? "Creating…" : "New document"}
         </button>
         <button
           onClick={() => fileInput.current?.click()}
           disabled={importDoc.isPending}
-          className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-800 hover:bg-neutral-50 disabled:opacity-50"
+          className="rounded-[8px] border border-ink-violet/40 px-4 py-2.5 text-[15px] font-medium text-ink-violet transition-colors hover:bg-newsprint disabled:opacity-50"
         >
-          {importDoc.isPending ? "Importing…" : "↑ Import .txt / .md"}
+          {importDoc.isPending ? "Importing…" : "Import .txt / .md"}
         </button>
         <input
           ref={fileInput}
@@ -76,23 +130,27 @@ export default function DocsList({ owned, shared }: { owned: OwnedDoc[]; shared:
           onChange={onImport}
           className="hidden"
         />
-        {importError && <span className="text-sm text-red-600">{importError}</span>}
+        {importError && <span className="text-[13px] text-[#b00020]">{importError}</span>}
       </div>
 
       <section>
-        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+        <h2 className="mb-4 text-[11px] font-semibold uppercase tracking-[0.11em] text-smoke">
           Owned by you
         </h2>
         {owned.length === 0 ? (
-          <p className="text-sm text-neutral-400">No documents yet.</p>
+          <p className="text-[15px] text-graphite">No documents yet. Start one above.</p>
         ) : (
-          <ul className="divide-y divide-neutral-100 rounded-lg border border-neutral-200">
-            {owned.map((d) => (
-              <li key={d.id}>
-                <Link href={`/docs/${d.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-neutral-50">
-                  <span className="font-medium text-neutral-900">{d.title}</span>
-                  <span className="text-xs text-neutral-400">{fmt(d.updatedAt)}</span>
+          <ul className="overflow-hidden rounded-[16px] border border-carbon/10 bg-paper-white shadow-[var(--shadow-subtle)]">
+            {owned.map((d, i) => (
+              <li key={d.id} className={`${rowBase} ${i > 0 ? "border-t border-carbon/8" : ""}`}>
+                <Link href={`/docs/${d.id}`} className="min-w-0 flex-1 truncate text-[16px] font-medium text-slate">
+                  {d.title}
                 </Link>
+                <span className="hidden shrink-0 text-[11px] uppercase tracking-[0.11em] text-smoke sm:inline">{fmt(d.updatedAt)}</span>
+                <span className="flex shrink-0 items-center gap-0.5">
+                  <GhostBtn onClick={() => copyDoc(d.id)} disabled={busy}>Copy</GhostBtn>
+                  <GhostBtn onClick={() => deleteDoc(d.id, d.title)} disabled={busy} danger>Delete</GhostBtn>
+                </span>
               </li>
             ))}
           </ul>
@@ -100,25 +158,28 @@ export default function DocsList({ owned, shared }: { owned: OwnedDoc[]; shared:
       </section>
 
       <section>
-        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+        <h2 className="mb-4 text-[11px] font-semibold uppercase tracking-[0.11em] text-smoke">
           Shared with you
         </h2>
         {shared.length === 0 ? (
-          <p className="text-sm text-neutral-400">Nothing shared with you yet.</p>
+          <p className="text-[15px] text-graphite">Nothing shared with you yet.</p>
         ) : (
-          <ul className="divide-y divide-neutral-100 rounded-lg border border-neutral-200">
-            {shared.map((d) => (
-              <li key={d.id}>
-                <Link href={`/docs/${d.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-neutral-50">
-                  <span className="flex items-center gap-2">
-                    <span className="font-medium text-neutral-900">{d.title}</span>
-                    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-amber-700">
-                      Shared · {d.role}
-                    </span>
-                    <span className="text-xs text-neutral-400">by {d.ownerName}</span>
+          <ul className="overflow-hidden rounded-[16px] border border-carbon/10 bg-paper-white shadow-[var(--shadow-subtle)]">
+            {shared.map((d, i) => (
+              <li key={d.id} className={`${rowBase} ${i > 0 ? "border-t border-carbon/8" : ""}`}>
+                <Link href={`/docs/${d.id}`} className="flex min-w-0 flex-1 items-center gap-3">
+                  <span className="truncate text-[16px] font-medium text-slate">{d.title}</span>
+                  <span className="inline-flex shrink-0 items-center gap-1.5 rounded-[40px] border border-carbon/10 bg-newsprint px-2.5 py-0.5 text-[11px] font-medium text-pewter">
+                    <span className="h-1.5 w-1.5 rounded-full bg-electric-violet" />
+                    {d.role === "EDIT" ? "Can edit" : "View"}
                   </span>
-                  <span className="text-xs text-neutral-400">{fmt(d.updatedAt)}</span>
+                  <span className="hidden shrink-0 text-[13px] text-graphite md:inline">by {d.ownerName}</span>
                 </Link>
+                <span className="hidden shrink-0 text-[11px] uppercase tracking-[0.11em] text-smoke sm:inline">{fmt(d.updatedAt)}</span>
+                <span className="flex shrink-0 items-center gap-0.5">
+                  <GhostBtn onClick={() => copyDoc(d.id)} disabled={busy}>Copy</GhostBtn>
+                  <GhostBtn onClick={() => leaveDoc(d.id, d.title)} disabled={busy} danger>Leave</GhostBtn>
+                </span>
               </li>
             ))}
           </ul>

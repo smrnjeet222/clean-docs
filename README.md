@@ -1,9 +1,8 @@
-# Ajaia Docs — Collaborative Document Editor
+# Folio — Collaborative Document Editor
 
 A lightweight collaborative document editor: rich-text editing, file attachments,
-per-user sharing with an owned-vs-shared distinction, and durable persistence.
-
-Built for the Ajaia Full Stack Product Engineer assignment.
+per-user sharing with an owned-vs-shared distinction, live freshness on shared
+documents, and durable persistence.
 
 - **Live demo:** `<DEPLOY_URL>` *(fill in after deploy)*
 - **Stack:** Next.js 16 (App Router) · TypeScript · Tailwind · Tiptap · TanStack Query · Zustand · Prisma 7 · Postgres (Neon) · iron-session
@@ -25,17 +24,17 @@ document under **Shared with you**.
 - **File upload** — attach a file to any document. Supported: PNG, JPG, GIF, WebP,
   PDF, TXT, Markdown, CSV. Max 5 MB. Stored in Postgres, served back via a
   permission-checked route.
-- **Import / export** — create a new document by importing a `.txt` or `.md` file
-  (Markdown is parsed to rich text); export any document back out as `.md` or
-  `.txt`. Import lives on the dashboard ("Import .txt / .md"); export is in the
-  editor header.
-- **Sharing** — owner grants another registered user `view` or `edit` access by
-  email. Owned vs shared documents are visually distinguished on the dashboard;
-  read-only users get a disabled editor.
-- **Live freshness on shared docs** — a shared document is polled; a co-editor's
-  changes appear without a manual refresh. Concurrent edits are guarded by
-  optimistic concurrency (document `version` + `409`), so no one silently
-  overwrites anyone — a conflict surfaces a "Reload latest" banner.
+- **Import / export** — import a `.txt`/`.md` file as a **new document** (dashboard)
+  or **append it into the open draft** (editor); Markdown is parsed to rich text.
+  Export any document to `.md` or `.txt` from the editor header.
+- **Sharing & access** — owner grants/unshares `view` or `edit` access by email.
+  Owned vs shared documents are visually distinguished on the dashboard; read-only
+  users get a disabled editor. Any reader can **duplicate** a document into their own
+  copy; a shared user can **leave**; the owner can **delete**.
+- **Live freshness on shared docs** — a shared document is polled (and refetched on
+  tab focus); a co-editor's changes appear without a manual refresh. Concurrent edits
+  are guarded by optimistic concurrency (document `version` + `409`), so no one
+  silently overwrites anyone — a conflict surfaces a "Reload latest" banner.
 - **Persistence** — documents, formatting (as sanitized HTML), shares, and files
   all survive refresh, stored in Postgres via Prisma.
 - **Auth** — email/password (bcrypt) with encrypted `iron-session` cookies.
@@ -75,8 +74,21 @@ npm run dev                      # http://localhost:3000
 3. Deploy. Then run `npm run db:push && npm run db:seed` once against the prod
    `DATABASE_URL` (locally with the prod URL, or via the Neon SQL console + seed).
 
+## Status
+
+**Working** — auth; create/rename/rich-text edit with autosave; file upload;
+import/export (`.txt`/`.md`); sharing with view/edit roles + owned-vs-shared
+distinction; duplicate / leave / delete; live freshness on shared docs with
+optimistic-concurrency conflict handling. Zod validation, server-side access
+control, 16 automated tests, green build, ESLint clean.
+
+**Intentionally cut** — real-time character-level co-editing (CRDT); share-by-link
+/ invites for non-registered users; soft-delete / trash.
+
+**Next** — presence indicators over the existing poll; per-paragraph version history
+on the `version` field; tokenized share-by-link.
+
 ## Documentation
 
-- [`ARCHITECTURE.md`](./ARCHITECTURE.md) — design, priorities, tradeoffs.
-- [`AI_WORKFLOW.md`](./AI_WORKFLOW.md) — how AI was used, modified, and verified.
-- [`SUBMISSION.md`](./SUBMISSION.md) — deliverable index.
+- [`ARCHITECTURE.md`](./ARCHITECTURE.md) — design, priorities, tradeoffs, scope cuts.
+- [`AI_WORKFLOW.md`](./AI_WORKFLOW.md) — AI tools used, outputs modified/rejected, and how it was verified.

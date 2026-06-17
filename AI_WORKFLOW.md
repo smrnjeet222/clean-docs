@@ -31,7 +31,7 @@
    it again would double-register and throw. Dropped the separate import.
 3. **Default dark-mode CSS (modified).** The scaffold's `prefers-color-scheme`
    block fought the explicit light UI. Replaced with a deterministic theme so the
-   demo renders consistently for reviewers.
+   app renders consistently regardless of system preference.
 4. **Default `prose` styling (caught gap).** Tailwind v4 doesn't ship typography;
    `prose` classes were inert until `@tailwindcss/typography` was added via the v4
    `@plugin` directive.
@@ -61,29 +61,42 @@ Two AI outputs were corrected during this pass:
   `scheduleFlush` referencing each other; the compiler flagged use-before-declare.
   Broke the cycle with a `flushRef`.
 
-## How I verified correctness & reliability
+## Visual redesign (from a design-system reference)
 
-- **Type safety** — `next build` runs the TypeScript compiler over all 13 routes;
-  build is green, ESLint clean.
-- **Automated tests** — `npm test` (Vitest, 12 tests): `sanitizeDocumentHtml`
-  (stored-XSS — strips `<script>`, `onclick`, `javascript:` URLs) and the save
-  machine's `nextStatus` (every meaningful transition, including
-  `dirty + remoteChanged → conflict` and "conflict only escapes via reload").
-- **Recovered a corrupted toolchain, didn't paper over it.** A stray
-  `node_modules/.pnpm` store (knip) left the npm tree inconsistent
-  (`isDescendantOf` null / phantom peer conflict). I diagnosed it to the hybrid
-  npm/pnpm state rather than blindly forcing `--legacy-peer-deps`, then did a clean
-  reinstall.
+The UI was redesigned to a supplied editorial design system (`DESIGN.md` — white
+canvas, a single GT Alpina-style display serif, near-monochrome with one electric-
+violet glow, hairline borders, dark CTAs). I declined the skill's default of spawning
+several "radically different" design agents: the visual language was already fixed, so
+divergent variants would have fought the spec. AI applied the tokens; I tuned widths
+back to the spec's editorial measures and fixed two regressions it introduced (below).
+
+## How I verified — correctness, UX quality, reliability
+
+**Correctness**
+- **Type safety** — `next build` compiles all 15 routes; build green, ESLint clean
+  (including Next 16's React Compiler rules).
+- **Automated tests** — `npm test` (Vitest, 16 tests): `sanitizeDocumentHtml`
+  (stored-XSS — strips `<script>`, `onclick`, `javascript:`), the save machine's
+  `nextStatus` (every transition, incl. `dirty + remoteChanged → conflict` and
+  "conflict only escapes via reload"), and the import converters.
+- **Live API smoke tests against Neon** — scripted the full flow with `curl`: login,
+  version-incrementing save, **stale write → 409**, a second user's save, the original
+  user's now-stale write → 409 (the core data-loss guard), upload, duplicate, leave,
+  owner-only delete → 403, unauthenticated → 401. All passed.
+
+**UX quality**
+- **Ran the app and read it like a user.** Two issues surfaced only by looking at
+  rendered output, not by types: a **hydration mismatch** from `toLocaleString()`
+  (server vs client locale) — fixed with a fixed-locale/UTC formatter; and the global
+  violet focus-halo bleeding onto the editor body — scoped off the ProseMirror surface.
+- **Read-only and conflict states checked by hand** — disabled editor for viewers, the
+  "Reload latest" banner when a poll lands mid-edit.
+
+**Reliability**
 - **Access model reasoned, not assumed** — every mutating route re-checks
-  `getAccessLevel` server-side; the UI is never trusted for permissions.
-  Non-readable docs return 404 to avoid ID enumeration.
-- **Manual walkthrough** — seeded Alice/Bob to exercise the owned-vs-shared paths,
-  edit→refresh persistence, upload, and read-only enforcement.
-
-## Honest assessment
-
-AI did the typing; the engineering decisions — relational model, centralized
-access function, files-in-DB tradeoff, sanitize-on-write, and what to cut
-(real-time CRDT, invite flow) — were directed and reviewed deliberately. The two
-framework breaking changes are exactly where blind trust in AI output would have
-failed, and where reading the installed docs paid off.
+  `getAccessLevel` server-side; the UI is never trusted for permissions. Non-readable
+  documents return 404 to avoid ID enumeration.
+- **Recovered a corrupted toolchain instead of papering over it.** A stray
+  `node_modules/.pnpm` store left the npm tree inconsistent (`isDescendantOf` null /
+  phantom peer conflict). I diagnosed it to a hybrid npm/pnpm state rather than blindly
+  forcing `--legacy-peer-deps`, then did a clean reinstall.

@@ -1,21 +1,24 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, Cormorant_Garamond } from "next/font/google";
 import "./globals.css";
 import Providers from "@/components/Providers";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
+  weight: ["400", "500", "600"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+// Editorial display serif — the GT Alpina Light substitute named in DESIGN.md.
+const display = Cormorant_Garamond({
+  variable: "--font-display",
   subsets: ["latin"],
+  weight: ["300", "400", "500"],
 });
 
 export const metadata: Metadata = {
-  title: "Ajaia Docs",
-  description: "Collaborative document editor",
+  title: "Folio",
+  description: "A collaborative document editor — a writer's drafting table.",
 };
 
 export default function RootLayout({
@@ -24,11 +27,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">
+    <html lang="en" className={`${inter.variable} ${display.variable} h-full antialiased`}>
+      <body className="min-h-full flex flex-col bg-paper-white font-sans text-press-black">
         <Providers>{children}</Providers>
       </body>
     </html>

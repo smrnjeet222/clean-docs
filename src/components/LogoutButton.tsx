@@ -10,7 +10,10 @@ export default function LogoutButton() {
     router.refresh();
   }
   return (
-    <button onClick={logout} className="text-sm text-neutral-600 underline hover:text-neutral-900">
+    <button
+      onClick={logout}
+      className="text-[14px] font-medium text-ink-violet underline decoration-1 underline-offset-2 hover:text-electric-violet"
+    >
       Sign out
     </button>
   );

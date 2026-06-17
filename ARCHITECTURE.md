@@ -22,9 +22,39 @@ area being deep and another stubbed.
 
 ## Data model
 
-```
-User ──< Document (owner) ──< Share >── User
-                   └──< FileAsset
+```mermaid
+erDiagram
+  USER ||--o{ DOCUMENT : owns
+  USER ||--o{ SHARE : "granted to"
+  DOCUMENT ||--o{ SHARE : "shared via"
+  DOCUMENT ||--o{ FILEASSET : has
+  USER {
+    string id PK
+    string email UK
+    string name
+    string passwordHash
+  }
+  DOCUMENT {
+    string id PK
+    string title
+    string contentHtml
+    int version
+    string ownerId FK
+  }
+  SHARE {
+    string id PK
+    string documentId FK
+    string userId FK
+    enum role "VIEW | EDIT"
+  }
+  FILEASSET {
+    string id PK
+    string documentId FK
+    string filename
+    string mimeType
+    int size
+    bytes data
+  }
 ```
 
 - `Document.contentHtml` — the editor's HTML, **sanitized on write**.
@@ -37,18 +67,49 @@ User ──< Document (owner) ──< Share >── User
 A single function, `getAccessLevel(documentId, userId) → owner | edit | view | none`,
 is the one place access is decided. Every API route calls it:
 
-- **Read** (GET document, download file): `owner | edit | view`.
+- **Read** (GET document, download file, **duplicate**): `owner | edit | view`.
 - **Write** (PUT content, upload file): `owner | edit`.
-- **Share / delete**: `owner` only.
+- **Share / unshare / delete**: `owner` only.
+- **Leave** (drop your own share): any non-owner grantee.
 
 Centralizing this avoids the classic bug where one endpoint forgets a check.
 Non-readable documents return **404, not 403**, so the API doesn't leak which
-document IDs exist.
+document IDs exist. The lifecycle actions fall out of the same four levels:
+*duplicate* needs only read (copies title, content, and attachments into a new
+document you own); *leave* removes your own `Share` row; *delete* is owner-only and
+permanent (behind a UI confirm).
+
+Every mutating request runs the same gauntlet:
+
+```mermaid
+flowchart LR
+  C["Client<br/>(TanStack hooks)"] -->|fetch| R["API route"]
+  R --> Z["Zod validate"]
+  Z -->|invalid| B["400"]
+  Z -->|valid| A["getAccessLevel()"]
+  A -->|none| NF["404"]
+  A -->|insufficient| F["403"]
+  A -->|owner / edit / view| DB[("Postgres<br/>via Prisma")]
+  DB --> OK["200 / 201"]
+```
 
 ## Client architecture (save machine · query seam · polling)
 
 The interactive document surface is a thin shell over three seams, not a god
 component:
+
+```mermaid
+flowchart TB
+  subgraph Before["Before — one shallow god component"]
+    E["Editor.tsx<br/>tiptap + save state + upload + share + access"]
+  end
+  subgraph After["After — thin shell over deep seams"]
+    W["Editor shell"] --> SM["save-machine (zustand FSM)"]
+    W --> H["useDocument* (TanStack Query seam)"]
+    W --> T["Tiptap view"]
+  end
+  Before -.deepen.-> After
+```
 
 - **Save lifecycle as a finite state machine** (`src/lib/save-machine.ts`). States
   are `clean · dirty · saving · saved · error · conflict`; the pure `nextStatus`
@@ -56,6 +117,20 @@ component:
   status + version; the `useDocumentSave` hook owns the side effects (debounce,
   network) the machine must not. This replaces the earlier scatter of a status
   string + a timer ref + ad-hoc `setSaveState` calls.
+
+  ```mermaid
+  stateDiagram-v2
+    [*] --> clean
+    clean --> dirty: edit
+    dirty --> saving: flush (debounced)
+    saving --> saved: saveOk
+    saving --> error: saveFail
+    saving --> conflict: 409 stale
+    saved --> dirty: edit
+    error --> saving: retry
+    dirty --> conflict: remoteChanged
+    conflict --> clean: reload
+  ```
 - **One TanStack Query seam for server-state** (`src/hooks/documents.ts`). Every
   client read/mutation — document fetch, create, save, upload, share, revoke —
   goes through query/mutation hooks with cache invalidation, replacing hand-rolled
@@ -68,6 +143,26 @@ component:
   when `clean`, a newer remote version swaps in silently; when `dirty/saving`, it
   raises the `conflict` state and a "Reload latest" banner instead of clobbering
   your edits.
+
+  ```mermaid
+  sequenceDiagram
+    participant U as You (shared-edit)
+    participant Q as Query (poll 5s / on focus)
+    participant API as /api/documents/:id
+    Q->>API: GET (poll / focus / reconnect)
+    API-->>Q: { content, version }
+    alt machine = clean
+      Q->>U: swap in remote silently
+    else machine = dirty / saving
+      Q->>U: "Reload latest" banner (conflict)
+    end
+    U->>API: PUT { content, lastSeenVersion }
+    alt version matches
+      API-->>U: 200 saved (version + 1)
+    else stale
+      API-->>U: 409 -> conflict state
+    end
+  ```
 
 ## Key tradeoffs
 
@@ -93,7 +188,18 @@ component:
   concurrency; true conflict-free concurrent typing is the next tier.
 - **Email invites for non-registered users** — sharing targets existing accounts;
   an invite flow is additive, not core.
-- **Document deletion UI** — the API exists (`DELETE`, owner-only); no button yet.
+- **Soft-delete / trash** — delete is permanent (behind a confirm).
+
+## Import / export & presentation
+
+- **Import / export** convert through one client util (`src/lib/document-format.ts`):
+  Markdown ↔ HTML via `marked`/`turndown`, plain text via Tiptap's own text getter.
+  Import either seeds a new document or appends into the open draft; the latter rides
+  the same autosave path, so no special persistence code.
+- **Design** follows a supplied editorial system (`DESIGN.md`): a near-monochrome
+  paper palette, a single display serif, hairline borders, and one electric-violet
+  glow used only as focus halos and ambient shadow — never a fill. Tokens live in
+  `globals.css` (`@theme`); fonts load via `next/font`.
 
 ## Security notes
 
@@ -103,6 +209,46 @@ component:
 - All mutations validate input with Zod and re-check access server-side — the UI
   never decides permissions.
 - Uploads are type- and size-checked server-side.
+
+## Architecture decisions
+
+Condensed records of the load-bearing decisions (the ones a future change would need
+to revisit). The client decisions came out of a deliberate post-MVP deepening pass.
+
+### ADR-1 — Save lifecycle as an explicit finite state machine
+**Decision.** Model autosave as `clean · dirty · saving · saved · error · conflict`
+in a pure `nextStatus` reducer behind a zustand store; side effects live in the
+hook. **Why.** The lifecycle was an implicit machine (a status string + a timer ref +
+scattered setters) — the shape couldn't even express "remote changed mid-edit". A
+real machine makes the `conflict` state reachable and gives a DOM-free test surface.
+**Rejected.** Keeping ad-hoc booleans; they don't compose with polling.
+
+### ADR-2 — One TanStack Query seam for client server-state
+**Decision.** Route every document read/mutation through query/mutation hooks with
+cache invalidation; hydrate from server components. **Why.** Hand-rolled `fetch` +
+`loading/error` booleans drifted against the server-rendered props and gave nowhere
+to hang polling. One seam buys cache, retry, dedupe, invalidation, and
+`refetchInterval`. **Rejected.** "TanStack for *everything*" — auth is one-shot
+navigation, so login/logout stay direct calls. Judgment over dogma.
+
+### ADR-3 — Polling + optimistic concurrency for shared-doc freshness
+**Decision.** Poll only collaborative documents (and on focus/reconnect); guard
+writes with `version` + a version-checked `updateMany` returning **409**. **Why.** A
+shared doc needs to feel live, but a naive `refetchInterval` either clobbers your
+in-progress edit or silently overwrites a co-editor (blind last-write-wins). The
+version guard turns a clash into a visible `conflict` instead of data loss.
+**Rejected.** Naive polling (data-loss hazard) and full CRDT/OT (out of budget).
+
+### ADR-4 — File bytes in Postgres, not blob storage
+**Decision.** Store attachments in-row (`Bytes`), ≤5 MB. **Why.** Removes an external
+dependency (S3/Blob + signed URLs) and lets the same `getAccessLevel` guard downloads.
+**Rejected.** Object storage — correct at scale, overkill here; noted as the next step.
+
+### ADR-5 — One centralized access function; 404 over 403
+**Decision.** All routes resolve permission through `getAccessLevel`; non-readable
+documents return **404**. **Why.** A single decision point prevents the "one endpoint
+forgot a check" bug; 404 avoids leaking which document IDs exist. **Rejected.**
+Per-route ad-hoc checks; per-resource 403 (leaks existence).
 
 ## Where it goes next
 
